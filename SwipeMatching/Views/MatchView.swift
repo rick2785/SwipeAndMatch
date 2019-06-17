@@ -37,7 +37,7 @@ class MatchView: UIView {
     }
     
     fileprivate let itsAMatchImageView: UIImageView = {
-        let iv = UIImageView(image: #imageLiteral(resourceName: "dismiss_down_arrow"))
+        let iv = UIImageView(image: #imageLiteral(resourceName: "itsamatch"))
         iv.contentMode = .scaleAspectFill
         return iv
     }()
