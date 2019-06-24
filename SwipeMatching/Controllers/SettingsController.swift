@@ -21,6 +21,10 @@ class CustomImagePickerController: UIImagePickerController {
 
 class SettingsController: UITableViewController, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
     
+    deinit {
+        print("Object is destroying itself properly")
+    }
+    
     var delegate: SettingsControllerDelegate?
     
     lazy var image1Button = createButton(selector: #selector(handleSelectPhoto))

@@ -9,14 +9,16 @@
 import LBTATools
 import Firebase
 
-class RecentMessageCell: LBTAListCell<UIColor> {
+class RecentMessageCell: LBTAListCell<RecentMessage> {
     let userProfileImageView = UIImageView(image: #imageLiteral(resourceName: "jane3"), contentMode: .scaleAspectFill)
     let usernameLabel = UILabel(text: "USERNAME HERE", font: .boldSystemFont(ofSize: 18))
     let messageTextLabel = UILabel(text: "Some long line of text that should span 2 lines", font: .systemFont(ofSize: 16), textColor: .gray, numberOfLines: 2)
     
-    override var item: UIColor! {
+    override var item: RecentMessage! {
         didSet {
-//            backgroundColor = item
+            usernameLabel.text = item.name
+            messageTextLabel.text = item.text
+            userProfileImageView.sd_setImage(with: URL(string: item.profileImageUrl))
         }
     }
     
@@ -33,7 +35,25 @@ class RecentMessageCell: LBTAListCell<UIColor> {
     }
 }
 
-class MatchesMessagesController: LBTAListHeaderController<RecentMessageCell, UIColor, MatchesHeader>, UICollectionViewDelegateFlowLayout {
+struct RecentMessage {
+    let text, uid, name, profileImageUrl: String
+    let timestamp: Timestamp
+    
+    init(dictionary: [String: Any]) {
+        self.text = dictionary["text"] as? String ?? ""
+        self.uid = dictionary["uid"] as? String ?? ""
+        self.name = dictionary["name"] as? String ?? ""
+        self.profileImageUrl = dictionary["profileImageUrl"] as? String ?? ""
+        
+        self.timestamp = dictionary["timestamp"] as? Timestamp ?? Timestamp(date: Date())
+    }
+}
+
+class MatchesMessagesController: LBTAListHeaderController<RecentMessageCell, RecentMessage, MatchesHeader>, UICollectionViewDelegateFlowLayout {
+    
+    var recentMessagesDictionary = [String: RecentMessage]()
+    
+    var listener: ListenerRegistration?
     
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, minimumLineSpacingForSectionAt section: Int) -> CGFloat {
         return 0
@@ -60,9 +80,55 @@ class MatchesMessagesController: LBTAListHeaderController<RecentMessageCell, UIC
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        fetchRecentMessages()
         
-        items = [.red, .blue, .green, .purple]
         setupUI()
+    }
+    
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        if isMovingToParent {
+            listener?.remove()
+        }
+    }
+    
+    deinit {
+        print("Reclaiming memory from the MatchesMessagesController")
+    }
+    
+    fileprivate func fetchRecentMessages() {
+        guard let currentUserId = Auth.auth().currentUser?.uid else { return }
+        
+        let query = Firestore.firestore().collection("matches_messages").document(currentUserId).collection("recent_messages")
+        listener = query.addSnapshotListener { (querySnapshot, err) in
+            if let err = err {
+                print(err)
+            }
+            
+            querySnapshot?.documentChanges.forEach({ (change) in
+                if change.type == .added || change.type == .modified {
+                    let dictionary = change.document.data()
+                    let recentMessage = RecentMessage(dictionary: dictionary)
+                    self.recentMessagesDictionary[recentMessage.uid] = recentMessage
+                }
+            })
+            
+            self.resetItems()
+        }
+    }
+    
+    override func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        let recentMessage = self.items[indexPath.item]
+        let dictionary = ["name": recentMessage.name, "profileImageUrl": recentMessage.profileImageUrl, "uid": recentMessage.uid]
+        let match = Match(dictionary: dictionary)
+        let controller = ChatLogController(match: match)
+        navigationController?.pushViewController(controller, animated: true)
+    }
+    
+    fileprivate func resetItems() {
+        let values = Array(recentMessagesDictionary.values)
+        items = values
+        collectionView.reloadData()
     }
     
     fileprivate func setupUI() {
